@@ -1,0 +1,12 @@
+.allure/
+.svn
+desktop.ini
+.idea
+*.iml
+target
+*._trace
+*.jar
+*.war
+*.ear
+*.class
+.gradle/
