@@ -1,0 +1,285 @@
+
+== Query Data Services
+
+The main purpose of these services is to provide customers with a data stream from some storage according to their query options:
+
+* For billing use case, it is data from the TS database, queried only by meter's ID and time period of billing under performing.
+* For analytic use case it is data from memory grid with wider variety of query parameters (OLAP like analysis):
+** level of aggregation: group of meters, district, city and so on
+** degree of aggregation: day, week, month and so on
+
+=== Query meter's data service
+
+It is necessary to mention, that this service provides the static stream with the results of the query, executed by
+logically "merged" database. It is not alive: meter's measurements, received the application after the moment of call query operation,
+will not be presented in it.
+
+==== API
+
+Query meter's data service API consists of four operations:
+
+* process initialization
+* receiving stream of requested data
+* asynchronous data acknowledgement
+* process completion
+
+Data querying starts with a synchronous call of *Init* operation with the next parameters and result:
+
+[source,ruby]
+----
+include::../proto/queryMeter.proto[tag=QueryRequest]
+----
+
+This operation is intended for some kind of negotiation between customer and instance of service.
+
+* By means of response *action=MOVE_TO* and field *url* instance can redirect the request on the different groups of
+instances. It might be helpful for testing a new version of service for a limited set of customers
+* By means of response *action=CONTINUE* instance can agree to provided stream of data with *streamUid*.
+* By means of response *action=RECONNECT* request can be redirected to some another instance in the same group
+
+After this asynchronous receiving data stream is started by operation *GetDataRequest* with the next parameters and stream of result *GetDataResponse*:
+
+[source,ruby]
+----
+include::../proto/queryMeter.proto[tag=GetDataRequest]
+----
+
+Property *GetDataResponse.offset* reports the position of the received fragment in the stream
+
+This operation is especially important with regard to collecting and publishing technical statistical data (out of the scope of this document).
+
+If connection between client and service is interrupted by accident or by the service's response (*action=RECONNECT*)
+client can restore the stream receiving by calling  *GetDataRequest* operation again with the "current"
+offset, reported as property *offset*
+
+Client asynchronously performs acknowledgement of received data by sending *AckDataRequest* with empty *AckDataResponse* answer.
+
+[source,ruby]
+----
+include::../proto/queryMeter.proto[tag=AckDataRequest]
+----
+
+The intensity of the flow has to be controlled by the client based on a backpressure pattern.
+If client can't implement this pattern due to platform restriction, next optional properties can provide this feature on the application level:
+
+* *GetDataRequest.backpressureCount* - for sending till receiving acknowledgement only some portion of data
+* *AckDataRequest.backpressureDelta* - for increasing / decreasing the size of this portion
+
+
+When client has received all requested data or decided to stop the operation, it calls *CompleteRequest* operation with the next parameters:
+
+[source,ruby]
+----
+include::../proto/queryMeter.proto[tag=CompleteRequest]
+----
+
+The only responsibility of this operation is transfer of some client statistics, describing communication session.
+More detailed description is out of the scope of this document
+
+==== Implementation
+
+For temporary storage of requested data it is proposed to apply distributed cache, REDiS or Infinispan, for example.
+The necessity to use the cache is due to the fact that the same stream at different times can be supported by different instances of
+Query meter's data service - instance can die or the client can reconnect fue to network issues;
+
+Possible implementation of Query meter's data service is based on the three next services:
+
+.Query meter's data service - performs the instrumentation of the process and communicates with the client
+* after receiving *QueryRequest*
+** initialise stream's storage in the cache or examine it's current state, if deals with the reconnected client.
+* transforms general query from a set of queries to several Dedicated server query services
+* after receiving *GetDataRequest*
+** by means of cache's API, subscribe on the current stream related notifications
+* by means of cache's API receives notifications from Indexer query result service about data availability.
+* read results from distributed cache and returns as stream to the client
+* asynchronously accepts *AckDataRequest* and clear some stream's items from the cache
+* after receiving *CompleteRequest* - delete stream's storage from the cache
+
+.Dedicated server query service, one per TS database instance
+* performs query operation on some TS database servers
+* sends results in separate fragments for saving and indexing to Indexer query result service
+
+.Indexer query result service
+* transforms data
+** rearranges the received data according to the measurement time
+** creates items of the stream
+** assigns them consecutive offsets
+* saves rearranged for temporary storage into distributed cache with reasonable TTL
+* by means of cache's API send notification to the Query meter's data service
+
+The necessity to introduce the Indexer query result service is caused by the fact that the measurements of one meter,
+received from different TS servers, can be rearranged in time due to asynchronous nature of communication and different
+response time of TS servers.
+
+The interaction in it's common form without reconnection of the client can be illustrated by the next diagram:
+
+[plantuml, emca-query, png]
+....
+control "Client"
+
+boundary "Query meter's\ndata service"
+database "Sharding\nConfiguration"
+
+control "Dedicated server\nquery service"
+database "TS Database"
+
+control "Indexer query\nresult service"
+database "Distributed Cache"
+
+"Client" -> "Query meter's\ndata service": call Init(QueryRequest)
+"Query meter's\ndata service" -> "Distributed Cache": init stream with streamUid
+"Query meter's\ndata service" -> "Sharding\nConfiguration": read sharding configuration
+"Query meter's\ndata service" -> "Client": returns streamUid
+
+group parallel execution
+"Query meter's\ndata service" -> "Dedicated server\nquery service": query and publish data
+"Dedicated server\nquery service" -> "TS Database": query data
+"Dedicated server\nquery service" -> "Indexer query\nresult service": publish found\ndata fragment to stream
+end
+
+"Indexer query\nresult service" -> "Indexer query\nresult service": rearrange data
+"Indexer query\nresult service" -> "Distributed Cache": save data
+"Indexer query\nresult service" -> "Distributed Cache": publish notification\n for Query meter's\ndata service
+
+"Client" -> "Query meter's\ndata service": call GetDataRequest(GetDataRequest)
+
+group parallel execution
+
+loop returns stream of data
+"Distributed Cache" -> "Query meter's\ndata service": send notification
+"Query meter's\ndata service" -> "Distributed Cache": read next fragment\n of stream's data
+"Query meter's\ndata service" -> "Client": return data as GetDataResponse
+end
+
+group apply acknowledgements
+"Client" -> "Query meter's\ndata service": call ackData(AckDataRequest)
+"Query meter's\ndata service" -> "Distributed Cache": remove fragment of stream
+end
+
+end
+
+"Client" -> "Client": collect statistics about session
+"Client" -> "Query meter's\ndata service": call Complete(CompleteRequest)
+"Query meter's\ndata service" -> "Client": return CompleteResponse
+"Query meter's\ndata service" -> "Distributed Cache": remove stream
+....
+
+=== Query runtime data service
+
+In contrast to Query meter's data service, this service has to provide alive stream of data,
+consist of updated values of keys, stpring  aggregated data.
+
+==== API
+
+Query runtime data service API consists of four operations:
+
+* process initialization
+* receiving stream of requested data
+* process completion
+
+Data querying starts with a synchronous call of *Init* operation with the next parameters and result:
+
+[source,ruby]
+----
+include::../proto/queryRuntime.proto[tag=QueryRequest]
+----
+
+This operation is intended for some kind of negotiation between customer and instance of service.
+
+* By means of response *action=MOVE_TO* and field *url* instance can redirect the request on the different groups of
+instances. It might be helpful for testing a new version of service for a limited set of customers
+* By means of response *action=CONTINUE* instance can agree to provided stream of data with *streamUid*.
+* By means of response *action=RECONNECT* request can be redirected to some another instance in the same group
+
+Restriction the scope of receiving data is performed by *keysFilter* property.
+Regularity of updates is configured by *frequencyOfSend* property. Usual client for such service is
+dashboard and we don't need to send data more often than necessary. Due to this restriction we don't need to apply backpressure pattern at all.
+
+After this asynchronous receiving data stream is started by operation *GetDataRequest* with the next parameters and stream of result *GetDataResponse*:
+
+[source,ruby]
+----
+include::../proto/queryRuntime.proto[tag=GetDataRequest]
+----
+
+Property *GetDataResponse.timestamp* reports the position of the received fragment in the requested stream
+
+If connection between client and service is interrupted by accident or by the service's response (*action=RECONNECT*)
+client can restore the stream receiving by calling  *GetDataRequest* operation again with the "current"
+time, reported as property *fromTime*
+
+When client decided to stop the operation, it calls *CompleteRequest* operation with the next parameters:
+
+[source,ruby]
+----
+include::../proto/queryRuntime.proto[tag=CompleteRequest]
+----
+
+The only responsibility of this operation is transfer of some client statistics, describing communication session.
+More detailed description is out of the scope of this document
+
+==== Implementation
+
+For temporary storage of requested data it is proposed to apply distributed cache, REDiS or Infinispan, for example.
+The necessity to use the cache is due to the fact that the same stream at different times can be supported by different instances of
+Query runtime data service - instance can die or the client can reconnect fue to network issues;
+
+Possible implementation of Query runtime data service is based on the two next services:
+
+.Query runtime data service - performs the instrumentation of the process and communicates with the client
+* after receiving *QueryRequest* store subscription's definition in the the cache as keys *SUBSCRIPTION_<UID>_FILTER* and
+*SUBSCRIPTION_<UID>_FREQUENCY* with reasonable TTL
+* after receiving *GetDataRequest*
+** periodically, according to the subscription's frequency
+*** read the list of changed key from the key *SUBSCRIPTION_<UID>_DATA_<TIME_INTERVAL>* (actually from two: the previous and current ones)
+*** read corresponding key's values and send to the client as *GetDataResponse*
+* after receiving *CompleteRequest* - delete all subscriptions's related keys from the cache
+
+.Runtime Analysis Service ( which is responsible for reliable update of Memory Grid and already previously described)
+* along with the update aggregating key's values (we ask to store updated aggregating keys and update sets together)
+** read definitions of all subscriptions (and cache locally of course)
+** for each registered subscription
+*** selects the keys according to the filter *SUBSCRIPTION_<UID>_FILTER*
+*** add these key's names to set, stored as key with name *SUBSCRIPTION_<UID>_DATA_<int(currentTime/subscriptionFrequency)>* with reasonable ttl
+
+The interaction in it's common form without reconnection of the client can be illustrated by the next diagram:
+
+[plantuml, emca-query, png]
+....
+control "Client"
+
+boundary "Query runtime's\ndata service"
+database "Distributed Cache"
+entity "SUBSCRIPTION_<UID>_DATA_XXX"
+
+control "Analysis\nService"
+database "Partitioned\nTopic"
+
+"Client" -> "Query runtime's\ndata service": Init(QueryRequest)
+"Query runtime's\ndata service" -> "Distributed Cache": store subscription's configuration
+
+group asynchronously
+"Analysis\nService" -> "Partitioned\nTopic": read enriched message
+"Analysis\nService" -> "Analysis\nService": prepare the list of updated keys
+"Analysis\nService" -> "Distributed Cache": read definitions of all subscription
+loop for each subscription
+"Analysis\nService" -> "Analysis\nService": filter list of updated keys with\nSUBSCRIPTION_<UID>_FILTER
+"Analysis\nService" -> "SUBSCRIPTION_<UID>_DATA_XXX": add keys to
+end
+"Analysis\nService" -> "Distributed Cache": apply batch update to grid
+end
+
+"Client" -> "Query runtime's\ndata service": call getData(GetDataRequest)
+
+loop under the control of scheduler
+"Query runtime's\ndata service" -> "SUBSCRIPTION_<UID>_DATA_XXX": read list of updated keys
+"Query runtime's\ndata service" -> "Distributed Cache": read key's values
+"Query runtime's\ndata service" -> "Client": return GetDataResponse
+end
+
+"Client" -> "Client": collect statistics about subscription
+"Client" -> "Query runtime's\ndata service": call Complete(CompleteRequest)
+"Query runtime's\ndata service" -> "Client": return CompleteResponse
+"Query runtime's\ndata service" -> "Distributed Cache": remove subscription
+
+....

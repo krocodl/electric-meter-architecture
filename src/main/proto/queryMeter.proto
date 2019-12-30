@@ -1,0 +1,81 @@
+// tag::QueryRequest[]
+message QueryRequest {
+    repeated bytes meterUuid = 1;
+    required int32 fromTime = 2;
+    required int32 toTime = 3;
+}
+
+message QueryResponse {
+    enum InitResponseEnum {
+        CONTINUE = 1;
+        RECONNECT = 2;
+        MOVE_TO = 3;
+    }
+    required InitResponseEnum action = 1;
+    required string streamUid = 2;
+    optional string url = 3;
+}
+// end::QueryRequest[]
+
+// tag::GetDataRequest[]
+message GetDataRequest {
+    required string streamUid = 1;
+    required int32 offset = 2;
+    optional int32 backpressureCount = 3;
+}
+
+message MeterMeasurement {
+    required int32 timestamp = 1;
+    required int32 measurement = 2;
+}
+
+message MeterData {
+    required bytes meterUuid = 1;
+    repeated MeterMeasurement data = 2;
+}
+
+message GetDataResponse {
+    enum InitResponseEnum {
+        CONTINUE = 1;
+        RECONNECT = 2;
+    }
+    required InitResponseEnum action = 1;
+    required string streamUid = 2;
+    required int32 offset = 3;
+    repeated MeterData data = 4;
+}
+// end::GetDataRequest[]
+
+// tag::AckDataRequest[]
+message AckDataRequest {
+    required string cursorUid = 1;
+    required int32 offset = 2;
+    optional int32 backpressureDelta = 3;
+}
+
+message AckDataResponse{
+
+}
+
+// end::AckDataRequest[]
+
+// tag::CompleteRequest[]
+message CompleteRequest {
+    required string monitoringData = 1;
+    required string streamUid = 2;
+}
+
+message CompleteResponse {
+    required bool result = 1;
+    optional string description = 2;
+}
+// end::CompleteRequest[]
+
+// tag::EmcaQueryService[]
+service EmcaQueryMetersDataService {
+    rpc Init(QueryRequest) returns (QueryResponse);
+    rpc getData(GetDataRequest) returns (stream GetDataResponse);
+    rpc ackData(AckDataRequest) returns (AckDataResponse);
+    rpc Complete(CompleteRequest) returns (CompleteResponse);
+}
+// end::EmcaQueryService[

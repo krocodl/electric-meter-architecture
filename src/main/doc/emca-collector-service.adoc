@@ -1,0 +1,106 @@
+
+== Collector Service
+
+The only responsibility of the Collector service is to accept data from the *EMCA-GATEWAY-AE* gateway and pass
+it to the Data Streaming Infrastructure as quickly and reliable as possible.
+In this case input of infrastructure is represented as Kafka topic with fixed name ("input", for example).
+This service does not implement any busness or technical logic.
+It accepts and stores duplicated messages. Deduplication of data will be performed afterwards.
+
+
+=== API
+
+Collector's service API consists of three operations: process initialization, asynchronous serial transmission of
+data batches, process completion
+
+Data exchange starts with a synchronous call of *Init* operation with the next parameters and result:
+
+[source,ruby]
+----
+include::../proto/collector.proto[tag=InitRequest]
+----
+
+This operation is intended for some kind of negotiation between *EMCA-GATEWAY-AE* and instance of *EMCA Collector*.
+
+* By means of fields *batchesCount* and *batchesSize* service can estimate forthcoming workload and reject it
+with *action=REPEAT_AFTER* in this case request of *EMCA-GATEWAY-AE* will be served by another instance of *EMCA Collector*
+immediately or after *pause* seconds.
+* By means of response *action=MOVE_TO* and field *url* instance can redirect the request on the different groups of
+*EMCA Collector* instances. It might be helpful in two next cases:
+** testing a new version of *EMCA Collector* for a limited set of clients
+** if some instances of *EMCA-GATEWAY-AE* was offline during long time and a lot of data has to be received,
+it makes sense to performed it on special "low loaded" group of *EMCA Collector*
+* By means of response *action=CONTINUE* instance can agree to accept offered data.
+** All or subset, limited by field *batchesCount*
+** also by means of *newConfiguratuion* property service can return the the gateway the new runtime configuration.
+For example, with new degree of data aggregation or with new access point for the next sessions.
+
+After this asynchronous bidirectional data transferring is performed with operation *SendBatch* with the next parameters and result:
+
+[source,ruby]
+----
+include::../proto/collector.proto[tag=BatchRequest]
+----
+
+It is necessary to mention, that received *BatchRequest* of data has to be reliable stored by the  Data Streaming Infrastructure
+before sending the answer, because *EMCA-GATEWAY-AE* will remove data from the permanent storage after receiving *BatchResponse* answer.
+In order to effective usage of streaming it is recommended to group data from the several *BatchRequest* before sending to
+streaming infrastructure. The optimal group size can be subject of configuration or / and calculated dynamically.
+passing
+This operation is especially important with regard to collecting and publishing technical statistical data (out of the scope of this document).
+
+When *EMCA-GATEWAY-AE* received all expected *BatchResponse*, it calls *CompleteRequest* operation with the next parameters:
+
+[source,ruby]
+----
+include::../proto/collector.proto[tag=CompleteRequest]
+----
+
+The only responsibility of this operation is transfer of some client statistics, describing communication session.
+More detailed description is out of the scope of this document.
+
+=== Basic use case - successful accepting all suggested data
+
+This the most common use case is based on the next operations, provided by *EMCA Collector* service:
+
+[source,ruby]
+----
+include::../proto/collector.proto[tag=EmcaCollectorService]
+----
+
+The interaction can illustrate by the next diagram:
+
+[plantuml, emca-collector-service, png]
+....
+database "Gateway\nStorage"
+control "EMCA-GATEWAY-AE"
+boundary "EMCA Collector"
+database "Data Streaming\nInfrastructure"
+
+
+"EMCA-GATEWAY-AE" -> "EMCA Collector": calls Init(InitRequest)
+"EMCA Collector" -> "EMCA-GATEWAY-AE": returns InitResponse(action=CONTINUE)
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": read data
+"EMCA-GATEWAY-AE" -> "EMCA Collector": calls SendBatch(BatchRequest(1))
+"EMCA-GATEWAY-AE" -> "EMCA Collector": calls SendBatch(BatchRequest(2))
+"EMCA-GATEWAY-AE" -> "EMCA Collector": calls SendBatch(BatchRequest(n))
+"EMCA Collector" -> "Data Streaming\nInfrastructure": save data
+"EMCA Collector" -> "EMCA-GATEWAY-AE": returns BatchResponse(1)
+"EMCA Collector" -> "EMCA-GATEWAY-AE": returns BatchResponse(2)
+"EMCA Collector" -> "EMCA-GATEWAY-AE": returns BatchResponse(n)
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": delete data
+"EMCA-GATEWAY-AE" -> "EMCA-GATEWAY-AE": collect statistics about session
+"EMCA-GATEWAY-AE" -> "EMCA Collector": calls Complete(CompleteRequest)
+"EMCA Collector" -> "EMCA-GATEWAY-AE": returns CompleteResponse
+....
+
+=== Reliability of service
+
+This service does not keep any internal state or performs changes of data into some third-part storage.
+That's why, it could die at any time, and the only negative effect may be to get some duplicated data  from the *EMCA-GATEWAY-AE*.
+Thus only an enter balancer in front of set of *EMCA-GATEWAY-AE* instances is needed to achieve reliability, fault tolerance, etc.
+But further processing of the received data in such a way should necessarily perform deduplication of requests.
+To be able to perform future deduplication UUID of data batch has to be stored as an message's property.
+
+
+

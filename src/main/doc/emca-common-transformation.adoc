@@ -1,0 +1,67 @@
+
+== Common transformation services
+
+=== Deduplication service
+
+Deduplication service is the first common transformation service of the application.
+It is responsible for processing raw and removing duplicates of data batches, sent by *EMCA-GATEWAY-AE* due
+to common network issues, it's nontransaction nature and only possible "retry on failure" strategy.
+
+Deduplication can be implemented by the next approach:
+
+* several instances of deduplication service, each of them reads one own partition inside incoming queue (topic in terms of kafka).
+* partitioning by raw data batch UUID guarantees us that
+* after any crash any non-acknowledged data batch will be re-processed by the same instance of the service
+* no parallel processing attempts per data batch
+* each instance of deduplication service has one own's in-memory bloom filter and us connected to
+own's NoSQL storage (REDIS, for example)
+* upon receiving the next message service performs the next operation:
+** with bloom filter validate existence of the batch UUID
+** in case of detected existence (bloom filter is false positive) validate existence of UUID in the NoSQL storage.
+The frequency of this operation is very low.
+** if the message is known, stops it's processing. Otherwise
+*** apply batch UUID to bloom filter
+*** save bloom filter in the NoSQL with setting TTL in limited by size collection
+*** send the message to the next service
+* from time to time deduplication service performs backup operations
+** save bloom filter's state in the NoSQL storage
+** save and backup NoSQL storage snapshot
+* splitting the whole topic into several partitions provides us scalability and performing  memory operations more efficiently
+
+The main positive use case (receiving non-known message) can be illustrated the next diagram:
+
+[plantuml, emca-deduplication-service, png]
+....
+database "Input partition"
+control "Deduplicator"
+database "Bloom filter"
+control "Scheduler"
+database "NoSQL storage"
+database "Output partition"
+
+"Deduplicator" -> "Input partition": read message
+"Deduplicator" -> "Bloom filter": validate UUID
+"Deduplicator" -> "Bloom filter": apply UUID
+"Deduplicator" -> "NoSQL storage": store UUID
+"Deduplicator" -> "Output partition": move message ahead
+
+"Scheduler" -> "Bloom filter": read filter's state
+"Scheduler" -> "NoSQL storage": save filter's state
+"NoSQL storage" -> "NoSQL storage": initiate backup
+....
+
+=== Regrouping Service
+
+As we remember raw data batch, sent by *EMCA-GATEWAY-AE*, contains data from several meters, packed together.
+For the most subsequent operations, the main analytical measurement will be the meters UUID.
+That's why it is necessary to split each already unique raw batch into several messages, dedicated to only single measurement of single meter.
+
+Implementation of this service's logic in quite simple:
+
+* read several raw data batches from input stream
+* split each batch into several messages with about the next structure
+** meter's UUID
+** meter's time
+** meter's measurement
+* write batch of new messsages into output stream
+

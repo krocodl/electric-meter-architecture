@@ -1,0 +1,64 @@
+// tag::InitRequest[]
+message InitRequest {
+    required string gatewayId = 1;
+    required string gatewayType = 2;
+    required string gatewayVersion = 3;
+    required string configurationVersion = 4;
+    required int32 batchesCount = 5;
+    required int32 batchesSize = 6;
+}
+message InitResponse {
+    enum InitResponseEnum {
+        CONTINUE = 1;
+        REPEAT_AFTER = 2;
+        MOVE_TO = 3;
+    }
+    required InitResponseEnum action = 1;
+    optional int32 pause = 2;
+    optional string url = 3;
+    optional int32 batchesCount = 4;
+    required string newConfiguratuion = 5;
+}
+// end::InitRequest[]
+
+// tag::BatchRequest[]
+message MeterMeasurement {
+    required int32 timestamp = 1;
+    required int32 measurement = 2;
+}
+
+message MeterData {
+    required bytes meterUuid = 1;
+    repeated MeterMeasurement data = 2;
+}
+
+message BatchRequest {
+    required bytes batchUuid = 1;
+    repeated MeterData data = 2;
+}
+
+message BatchResponse {
+    required bytes batchUuid = 1;
+    required bool result = 2;
+    optional string description = 3;
+}
+// end::BatchRequest[]
+
+// tag::CompleteRequest[]
+message CompleteRequest {
+    required string monitoringData = 1;
+}
+
+message CompleteResponse {
+    required bool result = 1;
+    optional string description = 2;
+}
+// end::CompleteRequest[]
+
+// tag::EmcaCollectorService[]
+service EmcaCollectorService {
+    rpc Init(InitRequest) returns (InitResponse);
+    rpc SendBatch(stream BatchRequest) returns (stream BatchResponse);
+    rpc Complete(CompleteRequest) returns (CompleteResponse);
+}
+// end::EmcaCollectorService[]

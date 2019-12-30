@@ -1,0 +1,53 @@
+:toc:
+:sectnums:
+
+= Architecture for an electric meter
+
+== Task definition
+
+.Original formulation
+* Build an entire architecture for an electric meter using protocol buffers, GRPC and the oneM2M standard.
+* Apply a time series driven approach for energy consumption by using proper TS database(s) and/or streaming and logging systems
+* Explain how to apply Apache Beam in Google Cloud Dataflow for the approach above. Describe how it works and where it fits in the applied architecture
+
+.Some clarifications received
+*  Business scenario encompasses the architecture you can pick up a use case (any use case should serve the purpose) and as
+we told you, we plan on using the data for monitoring, analytics, distributions etc… -> scalability is on all levels from sending
+and receiving to saving.
+* you can choose a random electric meter (which influences the M2M gateway and all sort of stuff) and study its data sheet to find answers
+
+== Boundary conditions
+
+According to the task definitions and received explanations, the next boundary additional conditions have been set:
+
+The purpose of the system (electric meter collector application, EMCA) is limited to electricity billing use cases,
+which involve the use of data with hourly granulation
+
+* reliable collection, transmission and storage of electricity consumption data
+* query API for client companies, which
+** perform periodic billing with usage of customer's tariff plans
+** monitor runtime electricity consumption with a multi-level aggregation (group of meters, house, district, town, region)
+** analyze long-term trends in electricity consumption
+
+Since oneM2M technology is not an obvious mainstream, I suspect that real features and performance of compatible devices and
+gateways can vary widely. In this sense, the proposed system architecture in regards to interaction with the oneM2M infrastructure
+is based on the following assumptions and limitations
+
+* Receiving data from a physical device is a responsibility of ADN-AE application, provided by device's vendor,
+and it is completely outside the scope of the system
+* Up to some hierarchical level of infrastructure (group of meters, floor, house and so on), reliable data transmission
+is responsibility of MD-CSE applications and is outside the scope of the system too
+* interaction between system and oneM2M infrastructure is performed by the MC-AE application installed in the gateway
+on a certain hierarchical level of infrastructure
+** this MC-AE application is in the scope of the system. Interaction between it and other system services is performed without oneM2M infrastructure
+** the MC-AE has to be able to interact with different forms of resources, published by ADN-AE application, provided by different vendor.
+
+
+include::high-level-overview.adoc[]
+include::emca-gateway.adoc[]
+include::emca-collector-service.adoc[]
+include::streaming-infrastructure.adoc[]
+include::emca-common-transformation.adoc[]
+include::emca-storage.adoc[]
+include::emca-analysis.adoc[]
+include::emca-query.adoc[]

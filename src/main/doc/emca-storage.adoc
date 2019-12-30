@@ -1,0 +1,112 @@
+
+== Storage data services
+
+Services of this group performs processing and writing data in the TS database.
+
+=== Sharding of data
+
+One of the key points is choosing a TS database. As there are not standard set of features, which has to be provided by such type of infrastructure, it is not very clear which part of the functional should be implemented by the application and which by the database.
+For example: modern and popular Click House database provides effective horizontal sharding out of the box.
+But classic solution InfluxDB suggests it only in the enterprise configuration.
+For training and demonstration purposes, I decided to describe it as an application function.
+
+It is principally impossible to propose a sharding principle that is suitable for all uses cases.
+That's why I take into account the personal billing use case: getting stream of data, identified by meter's UUID.
+
+So, taking into account th main use case, it is intended to apply a standard sharding pattern: meter's UUID -> hash function -> basket ID -> configuration -> server ID.
+
+==== Measurement to basket
+
+The most complex question is hash function, because it's clear that the number of baskets will change over time.
+Otherwise, they'll get bigger and bigger and we'll have problems distributing them among the servers.
+
+On the assumption that the number of baskets should not change too often, the following approach can be suggested:
+
+* hash function is the combination of calculation and configuration too
+* The configuration is organized in a manner similar to this
+** period of time. In out case it is pair of properties: *fromMonth* and *toMonth*
+** count of baskets
+
+Thus, if we know the hour of some meter's measurement, we can easy calculate the ID of basket.
+For example: *<start month>-<end month>-<hash(modulus(hash(meterUUID)/basketsCount)>*
+Such schema is flexible enough and allows flexibility to manage capacity and number of baskets.
+
+The same approach it is possible to apply if, for example, we want to keep all data from one city together.
+In this case we can enrich messages with additional data about the meter and use *cityID* instead of *meterUUID* for hash's calculation.
+
+Another frequent requirement is keeping the some part of data (for example, from one city) in the dedicated group of database servers. In this case it make sense to propagate the the *cityID* in the group's ID.
+
+==== Basket to server
+
+The next part is distribution backets among servers with taking into account, that servers are generally not reliable.
+Our case if simple enough, because our data is immutable by nature: we only add new elements to baskets, don't update or delete already existing ones.
+Also, it is necessary to take into account, that data from different periods are in different demand: average during gathering, high during billing and low all other time.
+
+Based on the requirements, it is possible to offer the following configuration of basket distribution by servers:
+
+* version of configuration
+* collection of baskets
+** basketId
+*** collections of servers (minimum two servers for reliable storage, much more for high loading)
+**** serverID
+**** optional fromServerId, which is used by migration operations
+
+Performing common operations:
+
+* when we add data, we always use *serverID*
+* When we read data, we use first of all *serverID*
+** if basket does not exist at all we switch to another server
+** if basket is under migration
+and all data was not found at new place, we use *fromServerId*
+
+Next use cases are important in this regard, but out of the scope of this document:
+
+* server selection for a new basket accoring to the available size of another requirements. For example, keeping data from the city on the dedicated group of server.
+* migration of baskets between servers. In this case it is very important to start the operation only after all instances already saw the new configuration.
+* basket's wide replication for support high loading during billing period
+* waste basket removal for reliable storage data infrequently used for analysis and infrequent reruns of billing
+
+=== Implementation
+
+Implementation of this approach consists of two services: server definition service and dedicated instances of database writing service.
+
+Server definition service is quite simple: it takes the message with one measurement of one meter and add to it next two properties: *serverId* and *basketId*.
+After that it publish it to output stream, directed to the appropriate server.
+
+Database writing service, serving a specific server, only slightly more complex:
+
+* it consumes messages from the input stream
+* groups them in memory for more effective loading into database
+* stores as one batch
+** gathered data in the table with the same name as *basketId*
+** offset in the input stream
+* acknowledge the messages
+
+In case of crash, own or a database, this service read last processed offset from the database and reprocessed forgotten messages from input stream
+
+This sequence of operations can be illustrated by the next diagram:
+
+[plantuml, emca-collector-service, png]
+....
+database "Input Stream"
+database "Sharding\nConfiguration"
+control "Server\nDefinition\nService"
+entity "Measurement\nMessage"
+
+database "Server's\nDedicated\nStream"
+control "Database writing service"
+entity "Data Batch"
+database "TS Database"
+
+"Server\nDefinition\nService" -> "Input Stream": read message
+"Server\nDefinition\nService" -> "Sharding\nConfiguration": read\nsharding configuration
+"Server\nDefinition\nService" -> "Measurement\nMessage": enrich with basketId
+"Server\nDefinition\nService" -> "Server's\nDedicated\nStream": route
+
+"Database writing service" -> "Server's\nDedicated\nStream": read\ngroup of messages
+"Database writing service" -> "Data Batch": add measurements to batch\naccording to basketId property
+"Database writing service" -> "TS Database": write batch\nand last offset
+"Database writing service" ->"Server's\nDedicated\nStream": acknowledge\nthe group of messages
+....
+
+

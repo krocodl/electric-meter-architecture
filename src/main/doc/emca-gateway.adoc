@@ -1,0 +1,155 @@
+== EMCA Gateway
+
+*EMCA-GATEWAY-AE* is an embedded in the oneM2M gateway application which collects data, temporary stores it in "ready to send"
+form and sends to the *EMCA Collector* service.
+
+For abstracting from meters specificity (format of resource, for example) it contains several dedicated plugins (*Resource Reader*), specific to
+the  range of known meter's type. Installation and configuration of these plugins are out of the scope of this document.
+It is assumed that the plug-ins are delivered during the initialization process of the device and can be received
+and could potentially be further requested from the EMCA through a special request.
+
+Interaction with *EMCA Collector* instances is performed through Internet. Maintaining the security of this interaction
+is out of the scope of this document too. Usually this is performed by establishing a VPN based on a pair of certificates.
+It is assumed that the first is installed during the initialization process of the device.
+Further on, it is used to periodically generate a new key pair, send a request for a new certificate signed with
+the old private key into EMCA and get a new certificate. Work with CRL in these systems is usually not implemented.
+
+Interaction between *ADN-METER-AE* and *EMCA-GATEWAY-AE* is performed through a hierarchy of "Middle nodes".
+For the simplicity of things, the following diagram of interaction contains only two nodes of this type,
+but in principle there can be any number of ones.
+
+All business related activity of *EMCA-GATEWAY-AE* can be split into three use cases:
+
+* getting information about available meters
+* receiving data from meters
+* sending data to *EMCA Collector*
+* *EMCA-GATEWAY-AE* recovery after incidents
+** after a period of self inactivity or inaccessibility of meters
+** after a period of self inactivity or inaccessibility of *EMCA Collector*
+
+Also *EMCA-GATEWAY-AE* should collect statistics about all performing I/O operations and using resources for passing
+them to the EMCA and performing further monitoring and analysis.
+Description of this technical activity is out the scope of this document.
+
+=== Getting information about available meters
+
+After installation in oneM2M network (for simplicity, the registration procedure has been omitted)
+any smart device by means of embedded ADN-AE (*ADN-METER-AE* in this case)  creates own resource, where he will publish his data in the future.
+By using oneM2M infrastructure *EMCA-GATEWAY-AE* is able to discover such containers and sign up for changes in their data.
+
+[plantuml, emca-gateways-discovery, png]
+....
+control "ADN-METER-AE"
+participant "MN-CSE-1"
+database "Meter's\nResource"
+participant "MN-CSE-N"
+control "EMCA-GATEWAY-AE"
+database "Gateway\nStorage"
+
+"ADN-METER-AE" -> "MN-CSE-1": creates container
+"MN-CSE-1" -> "Meter's\nResource": create
+"EMCA-GATEWAY-AE" -> "MN-CSE-N": Discover container \nwith filter
+"MN-CSE-N" -> "MN-CSE-1": Discover container \nwith filter
+"MN-CSE-1" -> "MN-CSE-N": container's URL
+"MN-CSE-N" -> "EMCA-GATEWAY-AE": container's URL
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": register meter
+"EMCA-GATEWAY-AE" -> "MN-CSE-N": subscribe for container's changes
+"MN-CSE-N" -> "MN-CSE-1": subscribe for container's changes
+"MN-CSE-1" -> "Meter's\nResource": create subscription
+....
+
+=== Receiving data from meters
+
+Meter's hardware periodically sends data to *ADN-METER-AE*, which stores it as as sub-resource in permanent form
+by means of MN-CSE infrastructure.
+When MN-CSE infrastructure stores new sub-resource inside some resource, it sends notification to any AE,
+which previously registered subscription on the changes inside this resource.
+After receiving notification, *ADN-METER-AE* reads changes, transform it by means of *Resource Reader* and stores in "ready to send" form.
+
+[plantuml, emca-gateways-receiving-data, png]
+....
+participant "Meter's\nHardware"
+control "ADN-METER-AE"
+participant "MN-CSE-1"
+database "Meter's\nResource"
+participant "MN-CSE-N"
+control "EMCA-GATEWAY-AE"
+participant "Resource\nReader"
+database "Gateway\nStorage"
+
+"Meter's\nHardware" -> "ADN-METER-AE": next measurement
+"ADN-METER-AE" -> "MN-CSE-1": save sub-resource
+"MN-CSE-1" -> "Meter's\nResource": create sub-resource
+"MN-CSE-1" -> "MN-CSE-N": notification
+"MN-CSE-N" -> "EMCA-GATEWAY-AE": notification
+"EMCA-GATEWAY-AE" -> "MN-CSE-N": get sub-resource
+"MN-CSE-N" -> "MN-CSE-1": get sub-resource
+"MN-CSE-1" -> "Meter's\nResource": read su-resource
+"MN-CSE-1" -> "MN-CSE-N": sub-resource \nwith next measurement
+"MN-CSE-N" -> "EMCA-GATEWAY-AE": sub-resource\nwith next measurement
+"EMCA-GATEWAY-AE" -> "Resource\nReader": transform resource
+"Resource\nReader" -> "EMCA-GATEWAY-AE": "ready to send" data
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage":  aggregation and save till sending
+....
+
+The data aggregation degree is completely depends on the business processing in the EMCA application and has to be the subject of runtime configuration, received from the server. Theoretically it can vary in wide range, but it is obviously does not make sense to send it with the granularity of raw measurement.
+
+=== Sending data to *EMCA Collector*
+
+After completing data collection and aggregation for the past hour, ADN-METER-AE tries to send all temporary stored data to *EMCA Collector*.
+To spread the load on the *EMCA Collector* service over time, this action is started at a random moment within the next hour.
+Data is sent in separate batches, each of which contains the data of one meter.
+In response from *EMCA Collector*, the *ADN-METER-AE* receives a notification that data has been received and stored safely and deletes it from the storage.
+Batches are sent and confirmations received asynchronously by two message flows.
+The intensity of each flow is controlled by the recipient based on a backpressure pattern
+
+[plantuml, emca-gateways-sending-data, png]
+....
+control "EMCA-GATEWAY-AE"
+database "Gateway\nStorage"
+boundary "EMCA Collector"
+
+"EMCA-GATEWAY-AE" -> "EMCA-GATEWAY-AE": wait random time
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": exchange establishment
+alt for all meters
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": read batch of data
+"EMCA-GATEWAY-AE" -> "EMCA Collector": asynchronous request
+"EMCA Collector" -> "EMCA-GATEWAY-AE": asynchronous confirmation
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": remove batch of data
+end
+"EMCA-GATEWAY-AE" -> "Gateway\nStorage": exchange completion
+....
+
+If the transmission is interrupted for any reason, service repeat the attempt to transfer the rest of the data.
+Double sending of the same data in this case is an unavoidable weakness, so *EMCA Collector* must be idempotent.
+
+=== Recovery after incidents
+
+We can expect next two common types of incidents:
+
+.Inactivity of EMCA-GATEWAY-AE
+* According to uses cases "Getting information about available meters" and "Receiving data from meters" it is reasonable
+to expect, that oneM2M infrastructure takes cares of delivery all non-received messages.
+* according to use case "Sending data to *EMCA Collector*" it is not a problem, because during some next period of time
+non-colected data will be received, stored and sent to the ECMA
+
+.Inaccessibility of meters
+* it is obviously out of the scope of this document. Reliable gathering and storage is the responsibility of the infrastructure
+* in the worst case we can expect gaps in the collected data. How to interpret them is a business matter.
+
+.Inaccessibility of *EMCA Collector*
+* in the case of a short-term unavailability it is not a problem, because the data is already stored and will be sent
+when the connection is restored.
+* in the case of a long-term unavailability it is a question of storage size.
+* in the worst case it is possible to store only recent data and accept gaps as a "lesser evil". Also it is possible
+to increase the granulation of stored measurements. In any case it is a business matter.
+
+=== Technical requirements
+
+* This module performs exclusively I/O bounded operations (accepting / performing HTTP calls, storing "ready to send" data on a disk,
+streaming data through GRPC connection), so it makes sense to implement it based on NIO approach.
+In case of usage JVM stack it can be performed based on netty HTTP client.
+* Effective usage of GRPS connection can be achieved by asynchronous bidirectional data streaming.
+This requires the mandatory adoption of a backpressure template. In case of usage JVM stack it can be performed based on reactive-grpc.
+* implementation of the gateway has to collect the data in the permanent "ready to send" storage in the similar form, as it is sent to the *EMCA Collector*.
+For example, batch UUID, which will be used hereinafter for deduplication, has to be generated and stored together with data.

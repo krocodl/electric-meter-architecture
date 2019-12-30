@@ -1,0 +1,106 @@
+== High-level overview of the system
+
+In accordance with previous assumptions, limitations and requirements we can identify the following
+principal activities and actors involved in them:
+
+.Electricity meter. Contains embedded ADN-AE application (*ADN_METER-AE*) which
+* registers in the oneM2M infrastructure
+* reads data from hardware and sends it to the dedicated MN-CSE
+
+.Multilevel oneM2M infrastructure
+* consists of several levels of middle nodes
+* each provides space for creation of data containers for resources ands send notification about new resources
+
+.Boundary oneM2M gateway with embedded IN-AE (*EMCA-GATEWAY-AE*) application service, provided by EMCA
+* subscribes for events, provided by oneM2M infrastructure (IN-CSE)
+* requests data, published as resources by meters, transforms them, performs primary data aggregation
+* temporary stores aggregated data in "ready to send" form in some local permanent storage
+* regularly sends data to collection data service (*EMCA Collector*) of EMCA through Internet
+
+.Services and groups of services inside EMCA, integrated by data streaming infrastructure,
+which provides reliable communication service and data routing
+* collection data service (*EMCA Collector*), which receives data from gateways
+* group of common transformation services, which prepare raw data for further processing
+* group of analysis services, which provides tools for runtime analysis of data
+* group of storage data service, which controls how data is stored in the TS database
+* group of query data service, which publish stored and runtime data for customers
+
+.Data storages:
+* Permanent TS database for permanent data storage
+* Memory grid for storing runtime data
+
+.External customers, which
+* provides meta information about meters to metadata service
+* query runtime data for monitoring and long lived data for billing and analysis from query and analysis services
+
+This list can be illustrated with the following diagram:
+
+[plantuml, notificationbas-architecture, png]
+....
+
+node "Electricity Meter" {
+    [ADN-AE]
+    [Meter's Hardware]
+}
+
+[Meter's Hardware] -down-> [ADN-AE] : send\nmeasurement
+
+node "oneM2M Middle Node 1" {
+    [MN1-CSE]
+    [Resource]
+}
+
+[ADN-AE] -down-> [MN1-CSE]: Register,\ncreate amd publish resource
+[MN1-CSE] -right-> [Resource]: manage resource
+
+node "oneM2M Middle Node N" {
+    [MNN-CSE]
+}
+
+[MN1-CSE] -down-> [MNN-CSE]: Register and\n send event
+
+node "oneM2M Infrastructure Nome" {
+    [IN-CSE]
+    [IN-EMCA-AE]
+    [Ready to send\nstorage]
+}
+
+[MNN-CSE] -down-> [IN-CSE]: Register and\n send event
+[IN-EMCA-AE] -up-> [IN-CSE]: Subscribe for events\nRead data
+[IN-EMCA-AE] -left-> [Ready to send\nstorage]: temporary\nstore data
+
+node EMCA {
+    [Collector Service]
+    [Transformation services]
+    [Storage services]
+    [Analysis services]
+
+    frame "Data Storages"{
+    database {
+        [Permanent TS]
+    }
+    cloud  {
+        [Memory grid]
+    }
+}
+    [Query services]
+    [Data Streaming Infrastructure]
+}
+
+[IN-EMCA-AE] -down-> [Collector Service]: send data
+
+[Customer] -up-> [Query services]: read streams of data
+
+[Collector Service] -down-> [Data Streaming Infrastructure]: store data
+[Transformation services] <-down-> [Data Streaming Infrastructure]
+
+[Storage services] <-up-> [Data Streaming Infrastructure]
+[Storage services] -down-> [Permanent TS]: save data permanently
+
+[Analysis services] <-up-> [Data Streaming Infrastructure]
+[Analysis services] -down-> [Memory grid]: save data temporary
+
+[Query services] <-up-> [Data Streaming Infrastructure]
+[Query services] -up-> [Permanent TS]: query data
+[Query services] -up-> [Memory grid]: query data
+....

@@ -1,0 +1,61 @@
+// tag::QueryRequest[]
+message QueryRequest {
+    repeated string keysFilter = 1;
+    required int32 frequencyOfSend = 2;
+}
+
+message QueryResponse {
+    enum InitResponseEnum {
+        CONTINUE = 1;
+        RECONNECT = 2;
+        MOVE_TO = 3;
+    }
+    required InitResponseEnum action = 1;
+    required string streamUid = 2;
+    optional string url = 3;
+}
+// end::QueryRequest[]
+
+// tag::GetDataRequest[]
+message GetDataRequest {
+    required string streamUid = 1;
+    required string fromTime = 2;
+}
+
+message KeyValue {
+    required string key = 1;
+    required int32 value = 2;
+}
+
+message GetDataResponse {
+    enum InitResponseEnum {
+        CONTINUE = 1;
+        RECONNECT = 2;
+    }
+    required InitResponseEnum action = 1;
+    required string streamUid = 2;
+    required int32 timestamp = 3;
+    repeated KeyValue data = 4;
+}
+// end::GetDataRequest[]
+
+
+// tag::CompleteRequest[]
+message CompleteRequest {
+    required string monitoringData = 1;
+    required string streamUid = 2;
+}
+
+message CompleteResponse {
+    required bool result = 1;
+    optional string description = 2;
+}
+// end::CompleteRequest[]
+
+// tag::EmcaQueryService[]
+service EmcaQueryRuntimeDataService {
+    rpc Init(QueryRequest) returns (QueryResponse);
+    rpc getData(GetDataRequest) returns (stream GetDataResponse);
+    rpc Complete(CompleteRequest) returns (CompleteResponse);
+}
+// end::EmcaQueryService[
