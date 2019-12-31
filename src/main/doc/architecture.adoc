@@ -15,7 +15,7 @@ character of the task, only the following two fragments are provided:
 * Apply a time series driven approach for energy consumption by using proper TS database(s) and/or streaming and logging systems
 * Explain how to apply Apache Beam in Google Cloud Dataflow for the approach above. Describe how it works and where it fits in the applied architecture
 
-.Some clarifications received
+.Some received clarifications
 *  Business scenario encompasses the architecture you can pick up a use case (any use case should serve the purpose) and as
 we told you, we plan on using the data for monitoring, analytics, distributions etc… -> scalability is on all levels from sending
 and receiving to saving.
