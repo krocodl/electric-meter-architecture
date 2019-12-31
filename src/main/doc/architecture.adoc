@@ -55,6 +55,15 @@ were not deeply discussed.
 Also, due to the illustrative character of the task, a lot of structurally required chapters (for example,
 "Reference documents", "Definitions" or "Abbreviations and Acronyms) was omitted.
 
+=== Some notes about implementation
+
+* As this document is short-lived and not designed to edit collaboratively, the adoc => pdf technology was optimal.
+Otherwise I'd be looking right now at the about next combination: Hugo + Docsy + something like Disqus or integration with
+Confluence  for runtime discussion about each chapter + integration with JIRA for tracking linked activity
+* Autogeneration of go code and pdf file was not implemented as a part of maven built process, because maven project is not
+the subject of demonstration and this action was performed only once.
+* I also have no idea what quality go code was generated from proto files.
+
 include::high-level-overview.adoc[]
 include::emca-gateway.adoc[]
 include::emca-collector-service.adoc[]
@@ -63,3 +72,4 @@ include::emca-common-transformation.adoc[]
 include::emca-storage.adoc[]
 include::emca-analysis.adoc[]
 include::emca-query.adoc[]
+include::appendix.adoc[]

@@ -1,5 +1,5 @@
 
-== Annexex
+== Annexes
 
 === Apache Beam in Google Cloud Dataflow
 
@@ -17,12 +17,4 @@ Another important part of Apache Beam functionality, such as flexible orchestrat
 and can be in this case (not in-cloud deployment) implemented based on the combination Kubernetes + some kind of service mesh,
 like Istio, for example.
 
-=== Some notes about implementation
-
-* As this document is short-lived and not designed to edit collaboratively, the adoc => pdf technology was optimal.
-Otherwise I'd be looking right now at the about next combination: Hugo + Docsy + something like Disqus or integration with
-Confluence  for runtime discussion about each chapter + integration with JIRA for tracking linked activity
-* Autogeneration of go code and pdf file was not implemented as a part of built process, because maven project is not
-the subject of demonstration and this action was performed only once
-* I also have no idea what quality go code was generated from proto files.
 
