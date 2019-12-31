@@ -1,57 +1,60 @@
+syntax = "proto3";
+package org.demo.collector;
+
 // tag::InitRequest[]
 message InitRequest {
-    required string gatewayId = 1;
-    required string gatewayType = 2;
-    required string gatewayVersion = 3;
-    required string configurationVersion = 4;
-    required int32 batchesCount = 5;
-    required int32 batchesSize = 6;
+    string gatewayId = 1;  // required
+    string gatewayType = 2;  // required
+    string gatewayVersion = 3; // required
+    string configurationVersion = 4; // required
+    int32 batchesCount = 5; // required
+    int32 batchesSize = 6; // required
 }
 message InitResponse {
     enum InitResponseEnum {
-        CONTINUE = 1;
-        REPEAT_AFTER = 2;
-        MOVE_TO = 3;
+        CONTINUE = 0;
+        REPEAT_AFTER = 1;
+        MOVE_TO = 2;
     }
-    required InitResponseEnum action = 1;
-    optional int32 pause = 2;
-    optional string url = 3;
-    optional int32 batchesCount = 4;
-    required string newConfiguratuion = 5;
+    InitResponseEnum action = 1; // required
+    int32 pause = 2;
+    string url = 3;
+    int32 batchesCount = 4;
+    string newConfiguratuion = 5;
 }
 // end::InitRequest[]
 
 // tag::BatchRequest[]
 message MeterMeasurement {
-    required int32 timestamp = 1;
-    required int32 measurement = 2;
+    int32 timestamp = 1; // required
+    int32 measurement = 2;  // required
 }
 
 message MeterData {
-    required bytes meterUuid = 1;
+    bytes meterUuid = 1; // required
     repeated MeterMeasurement data = 2;
 }
 
 message BatchRequest {
-    required bytes batchUuid = 1;
+    bytes batchUuid = 1;  // required
     repeated MeterData data = 2;
 }
 
 message BatchResponse {
-    required bytes batchUuid = 1;
-    required bool result = 2;
-    optional string description = 3;
+    bytes batchUuid = 1; // required
+    bool result = 2;  // required
+    string description = 3;
 }
 // end::BatchRequest[]
 
 // tag::CompleteRequest[]
 message CompleteRequest {
-    required string monitoringData = 1;
+    string monitoringData = 1; // required
 }
 
 message CompleteResponse {
-    required bool result = 1;
-    optional string description = 2;
+    bool result = 1; // required
+    string description = 2; // required
 }
 // end::CompleteRequest[]
 

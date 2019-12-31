@@ -1,0 +1,28 @@
+
+== Annexex
+
+=== Apache Beam in Google Cloud Dataflow
+
+Apache Beam is an Open Source ETL solution, which provides functionality of orchestrations stream data processing
+pipelines based on several infrastructure platforms such as Apache Flink, Apache Spark, or Google Cloud Dataflow.
+
+From the microservices architecture point of view it is some combinatation of "microservice chassis" pattern with
+the the orchestration of instances and data topics infrastructure.
+I don't have any experience of usage Apache Beam and Google Cloud Dataflow, but from the first glance, IMHO
+it is something like a distributed well known Camel ESB.
+
+In the proposed architecture some restricted part of similar functionality (flexible pipelines) is provided by the applying
+"Routing Slip or Routing Table" pattern on the Data Streaming Infrastructure level.
+Another important part of Apache Beam functionality, such as flexible orchestration of services is not described at all
+and can be in this case (not in-cloud deployment) implemented based on the combination Kubernetes + some kind of service mesh,
+like Istio, for example.
+
+=== Some notes about implementation
+
+* As this document is short-lived and not designed to edit collaboratively, the adoc => pdf technology was optimal.
+Otherwise I'd be looking right now at the about next combination: Hugo + Docsy + something like Disqus or integration with
+Confluence  for runtime discussion about each chapter + integration with JIRA for tracking linked activity
+* Autogeneration of go code and pdf file was not implemented as a part of built process, because maven project is not
+the subject of demonstration and this action was performed only once
+* I also have no idea what quality go code was generated from proto files.
+

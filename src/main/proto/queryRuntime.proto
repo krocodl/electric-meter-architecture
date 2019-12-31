@@ -1,40 +1,43 @@
+syntax = "proto3";
+package org.demo.queryRuntime;
+
 // tag::QueryRequest[]
 message QueryRequest {
     repeated string keysFilter = 1;
-    required int32 frequencyOfSend = 2;
+    int32 frequencyOfSend = 2; // required
 }
 
 message QueryResponse {
     enum InitResponseEnum {
-        CONTINUE = 1;
-        RECONNECT = 2;
-        MOVE_TO = 3;
+        CONTINUE = 0;
+        RECONNECT = 1;
+        MOVE_TO = 2;
     }
-    required InitResponseEnum action = 1;
-    required string streamUid = 2;
-    optional string url = 3;
+    InitResponseEnum action = 1; // required
+    string streamUid = 2; // required
+    string url = 3;
 }
 // end::QueryRequest[]
 
 // tag::GetDataRequest[]
 message GetDataRequest {
-    required string streamUid = 1;
-    required string fromTime = 2;
+    string streamUid = 1;  // required
+    string fromTime = 2;  // required
 }
 
 message KeyValue {
-    required string key = 1;
-    required int32 value = 2;
+    string key = 1;  // required
+    int32 value = 2;  // required
 }
 
 message GetDataResponse {
     enum InitResponseEnum {
-        CONTINUE = 1;
-        RECONNECT = 2;
+        CONTINUE = 0;
+        RECONNECT = 1;
     }
-    required InitResponseEnum action = 1;
-    required string streamUid = 2;
-    required int32 timestamp = 3;
+    InitResponseEnum action = 1;  // required
+    string streamUid = 2;  // required
+    int32 timestamp = 3;  // required
     repeated KeyValue data = 4;
 }
 // end::GetDataRequest[]
@@ -42,13 +45,13 @@ message GetDataResponse {
 
 // tag::CompleteRequest[]
 message CompleteRequest {
-    required string monitoringData = 1;
-    required string streamUid = 2;
+    string monitoringData = 1;  // required
+    string streamUid = 2;  // required
 }
 
 message CompleteResponse {
-    required bool result = 1;
-    optional string description = 2;
+    bool result = 1;     // required
+    string description = 2;
 }
 // end::CompleteRequest[]
 

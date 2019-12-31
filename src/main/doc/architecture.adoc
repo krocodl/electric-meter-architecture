@@ -49,7 +49,8 @@ on a certain hierarchical level of infrastructure
 
 Since this document is not a System Design Specification (and due to a lack of time), a lot of aspects (for example,
 the message structure) is presented with a minimum of technical detail required to illustrate
-the proposed architectural principles.
+the proposed architectural principles. For the same reason, the details of the orchestration of individual services
+were not deeply discussed.
 
 Also, due to the illustrative character of the task, a lot of structurally required chapters (for example,
 "Reference documents", "Definitions" or "Abbreviations and Acronyms) was omitted.
