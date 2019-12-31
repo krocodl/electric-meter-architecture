@@ -10,8 +10,16 @@ It accepts and stores duplicated messages. Deduplication of data will be perform
 
 === API
 
-Collector's service API consists of three operations: process initialization, asynchronous serial transmission of
-data batches, process completion
+Collector's service API consists of three operations:
+
+* process initialization
+* asynchronous serial transmission of data batches
+* process completion
+
+[source,ruby]
+----
+include::../proto/collector.proto[tag=EmcaCollectorService]
+----
 
 Data exchange starts with a synchronous call of *Init* operation with the next parameters and result:
 

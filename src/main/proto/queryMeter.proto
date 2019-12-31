@@ -71,11 +71,11 @@ message CompleteResponse {
 }
 // end::CompleteRequest[]
 
-// tag::EmcaQueryService[]
+// tag::EmcaQueryMetersDataService[]
 service EmcaQueryMetersDataService {
     rpc Init(QueryRequest) returns (QueryResponse);
     rpc getData(GetDataRequest) returns (stream GetDataResponse);
     rpc ackData(AckDataRequest) returns (AckDataResponse);
     rpc Complete(CompleteRequest) returns (CompleteResponse);
 }
-// end::EmcaQueryService[
+// end::EmcaQueryMetersDataService[]

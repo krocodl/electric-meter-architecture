@@ -52,10 +52,10 @@ message CompleteResponse {
 }
 // end::CompleteRequest[]
 
-// tag::EmcaQueryService[]
+// tag::EmcaQueryRuntimeDataService[]
 service EmcaQueryRuntimeDataService {
     rpc Init(QueryRequest) returns (QueryResponse);
     rpc getData(GetDataRequest) returns (stream GetDataResponse);
     rpc Complete(CompleteRequest) returns (CompleteResponse);
 }
-// end::EmcaQueryService[
+// end::EmcaQueryRuntimeDataService[]

@@ -50,6 +50,10 @@ database "Output partition"
 "NoSQL storage" -> "NoSQL storage": initiate backup
 ....
 
+Also, instead of separate instance of NoSQL storage, it is possible to apply deployed on the same instance RockDB
+NoSQL key-value storage, which provides quite high speed of "add data" operations and embedded inside storage
+bloom filter.
+
 === Regrouping Service
 
 As we remember raw data batch, sent by *EMCA-GATEWAY-AE*, contains data from several meters, packed together.

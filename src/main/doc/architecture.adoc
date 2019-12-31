@@ -1,9 +1,14 @@
 :toc:
 :sectnums:
 
-= Architecture for an electric meter
+= System Architecture Specification for an electric meter
 
-== Task definition
+== Introduction
+
+=== System Requirement Specification
+
+Normally it is the subject of a separate document, but in this case, due to the illustrative
+character of the task, only the following two fragments are provided:
 
 .Original formulation
 * Build an entire architecture for an electric meter using protocol buffers, GRPC and the oneM2M standard.
@@ -16,7 +21,7 @@ we told you, we plan on using the data for monitoring, analytics, distributions 
 and receiving to saving.
 * you can choose a random electric meter (which influences the M2M gateway and all sort of stuff) and study its data sheet to find answers
 
-== Boundary conditions
+=== Boundary conditions
 
 According to the task definitions and received explanations, the next boundary additional conditions have been set:
 
@@ -42,6 +47,12 @@ on a certain hierarchical level of infrastructure
 ** this MC-AE application is in the scope of the system. Interaction between it and other system services is performed without oneM2M infrastructure
 ** the MC-AE has to be able to interact with different forms of resources, published by ADN-AE application, provided by different vendor.
 
+Since this document is not a System Design Specification (and due to a lack of time), a lot of aspects (for example,
+the message structure) is presented with a minimum of technical detail required to illustrate
+the proposed architectural principles.
+
+Also, due to the illustrative character of the task, a lot of structurally required chapters (for example,
+"Reference documents", "Definitions" or "Abbreviations and Acronyms) was omitted.
 
 include::high-level-overview.adoc[]
 include::emca-gateway.adoc[]

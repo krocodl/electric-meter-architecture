@@ -23,6 +23,11 @@ Query meter's data service API consists of four operations:
 * asynchronous data acknowledgement
 * process completion
 
+[source,ruby]
+----
+include::../proto/queryMeter.proto[tag=EmcaQueryMetersDataService]
+----
+
 Data querying starts with a synchronous call of *Init* operation with the next parameters and result:
 
 [source,ruby]
@@ -176,6 +181,11 @@ Query runtime data service API consists of four operations:
 * process initialization
 * receiving stream of requested data
 * process completion
+
+[source,ruby]
+----
+include::../proto/queryRuntime.proto[tag=EmcaQueryRuntimeDataService]
+----
 
 Data querying starts with a synchronous call of *Init* operation with the next parameters and result:
 
