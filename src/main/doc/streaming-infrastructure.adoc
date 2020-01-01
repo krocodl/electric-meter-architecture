@@ -15,12 +15,18 @@ In our case it is better to approach enterprise integration pattern "Routing Sli
 * attach a "Routing Slip" to each message, specifying the sequence of processing steps.
 * Wrap each component with a special message router that reads the Routing Slip and routes the message to the next component in the list.
 
-image::https://www.enterpriseintegrationpatterns.com/img/RoutingTableSimple.gif[]
+image::RoutingTableSimple.png[]
+
 
 By introduction this pattern we can achieve next benefits:
 
 * low cohesion between services
-* deployment of new functionality will not require redeployment already existing related services. For example, if in case of sharding we want to send baskets with daya to the servers, dedicated to the specific cities, we have to enrich the messages with measurements before operation the distribution data among servers. In the our simplest case there is no need to do it.
+* deployment of new functionality will not require redeployment already existing related services. For example:
+** if in case of sharding we want to send baskets with data to the servers, dedicated to the specific cities,
+we have to enrich the messages with measurements before operation the distribution data among servers.
+In the our simplest case there is no need to do it.
+** in case of law related requirements from the market regulator, we will always be able to easily connect
+the functionality of backup of all incoming message traffic.
 * we can test new functionality or new versions of existing services with limited stream of data
 
 So, we introduce the special service *EMCA stream manager* which has to perform the next operations:
